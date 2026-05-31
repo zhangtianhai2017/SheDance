@@ -27,6 +27,11 @@ ue/**/Saved/
 ue/**/DerivedDataCache/
 ue/**/.vs/
 
+# 复制进来的 UE 工程(自 Waysee 分支):整个工程暂不入库——是磁盘上的工作资产,
+# 含模板 + Wayseer 插件源码,与舞蹈工具无关。将来写舞蹈相关 UE 代码再按文件追踪。
+ue/TP_ThirdPerson/
+ue/robocopy.log
+
 # OS
 .DS_Store
 Thumbs.db

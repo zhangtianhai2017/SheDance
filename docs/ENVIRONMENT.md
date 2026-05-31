@@ -27,19 +27,30 @@
 | **JAX 0.7.2 (CUDA)** | ✅ | `jax.devices()=[CudaDevice(id=0)]`，默认后端 gpu |
 | **MuscleMimic** + warp-lang 1.10 | ✅ | `import musclemimic` OK；uv sync --extra cuda ~4.5min |
 | **MyoFullBody 模型** | ✅ | **禁手指 354 肌肉 / 88 DOF；含手指 416 肌肉 / 128 DOF；102 刚体**，全 Hill 型 |
+| **S0 imitation demo** | ✅ | 预训练 `mm-10m-2` 模仿走路 548 步，关节误差 0.059 → `renders/S0_myofullbody_walk_demo.mp4` |
+| **重定向依赖**（torch+smplx+gmr_plus） | ✅ | `uv sync --extra cuda --extra smpl --extra gmr` |
+| **SMPL-H + MANO → SMPLH_NEUTRAL.pkl** | ✅ | `smpl_models/SMPLH_NEUTRAL.pkl`，`SMPLH_Parser` 加载 OK（verts 6890 / joints 73）|
 
 > **结论**：完整 GPU 肌肉栈（含**全身 416 肌肉带手臂+手指**）在 A6000 上端到端跑通。
-> MuscleMimic 用 **JAX**（非 torch），故无需单独装 PyTorch。
+> MuscleMimic 用 **JAX**（非 torch；retarget 子流程才用 torch）。
 
-## 待办（被账号/输入阻塞）
+### SMPL-H 设置要点（坑）
 
-- **S0 imitation demo**：需 HuggingFace 对 `amathislab/demo_dataset` 授权 + token（用户）。
-- **S1 数据**：AIST++ 下载 + SMPL 注册（smpl.is.tue.mpg.de，用户）用于重定向。
-- **M0/UE**：UE 5.6 引擎路径 + 目标 MetaHuman（待用户提供）。
+- MuscleMimic 重定向要 **SMPL-H + MANO**（来自 mano.is.tue.mpg.de），**不是**基础 SMPL（smpl.is.tue.mpg.de）。
+- 需 2 个下载：**Extended SMPL+H model**（→ `smplh/`）+ **Models & Code**（→ `mano_v1_2/`）。
+- 本项目用的是 **300维 neutral** 版（`smplh/SMPLH_NEUTRAL.npz` 重排成 `smplh/neutral/model.npz`）——与 16维官方版**逐值等价**（parser 只用前 10 betas，topology 相同）。
+- 本机**无 conda**，官方 `install_smplh.sh` 用不了。改用一次性 `uv venv --python 3.10` + `numpy<1.23` + `chumpy`（**注意：chumpy 0.70 构建需先 `pip install pip` 进该 env**）+ 打 chumpy 的 numpy 导入补丁，再跑 `generate_smplh_model.py --smpl-conf-file ~/.musclemimic/MUSCLEMIMIC_VARIABLES.yaml`。
+- 路径已写入 `~/.musclemimic/MUSCLEMIMIC_VARIABLES.yaml`（`musclemimic-set-smpl-model-path`）。
+
+## 待办
+
+- **S1 重定向**：下 AIST++ 舞蹈数据 → 接入 MuscleMimic 重定向（SMPL-H 地基已就位）→ 训练肌肉身体跳舞。
+- **M0/UE**：编译已复制的 `ue/TP_ThirdPerson` 工程 → 研究 SMPL/动作 → MetaHuman 重定向方法。
 
 > 文件系统：训练 repo/数据放在 WSL ext4（`~/shedance/`），非 `/mnt/c`（跨文件系统 I/O 慢）。
 
 ## Windows 侧（M0 用）
 
-- UE 5.6（待确认安装路径与版本）
-- 一个目标 MetaHuman（待用户指定或用默认预设）
+- UE 5.6 Installed 引擎 `C:\Program Files\Epic Games\UE_5.6\`（交接已验证）。
+- UE 工程已复制：`SheDance/ue/TP_ThirdPerson`（自 Waysee `.test_project_live` 分支，独立；含 MetaHuman/Maps/角色）。
+- ⚠️ 编译注意：共用引擎的 MetaHuman 共享 DLL 雷区——编前查另一项目编辑器是否关闭（见 memory）。

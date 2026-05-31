@@ -26,8 +26,9 @@ docs/       设计文档 + Decision Log
 - [x] 环境探测（A6000 48G / WSL2 Ubuntu-22.04 / GPU 直通 OK）
 - [x] 仿真栈验证：MuJoCo + MyoSuite + **MuscleMimic 全身 416 肌肉模型**在 A6000 上加载（JAX/GPU 跑通）
 - [x] **S0 imitation demo 跑通**：预训练 416 肌肉策略模仿走路 → `renders/S0_myofullbody_walk_demo.mp4`（548 步，关节位置误差 0.059，EGL 无头渲染）
-- [ ] M0 哑管道：AIST++ 干净动作 → MetaHuman → UE 播放（阻塞：UE 路径 + MetaHuman）
-- [ ] S1 肌肉身体跳 Pop/Lock（阻塞：AIST++ 下载 + SMPL 注册）
+- [x] **SMPL-H 重定向地基就位**：SMPL-H(300维 neutral，等价替代)+ MANO → `SMPLH_NEUTRAL.pkl`，已验证加载（verts 6890 / joints 73）
+- [ ] M0 哑管道：AIST++ 干净动作 → MetaHuman → UE 播放（UE 工程已复制到 `ue/TP_ThirdPerson`，待编译 + 重定向方法）
+- [ ] S1 肌肉身体跳 Pop/Lock（待：AIST++ 下载 + 接入 MuscleMimic 重定向）
 - [ ] S1 肌肉身体跳这支舞（核心研究风险）
 - [ ] S2 接入单目视频识别
 - [ ] S3 手指/风格层
