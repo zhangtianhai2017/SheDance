@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# 大体积数据 / 模型（不入库）
+data/aist*/
+data/**/*.pkl
+data/**/*.npz
+data/smpl/*.pkl
+*.mp4
+*.fbx
+checkpoints/
+runs/
+wandb/
+*.onnx
+*.pt
+*.pth
+
+# UE 生成物
+ue/**/Binaries/
+ue/**/Intermediate/
+ue/**/Saved/
+ue/**/DerivedDataCache/
+ue/**/.vs/
+
+# OS
+.DS_Store
+Thumbs.db
