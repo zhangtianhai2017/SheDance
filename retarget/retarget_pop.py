@@ -46,6 +46,9 @@ def main() -> int:
     ap.add_argument("--model", default="MyoFullBody")
     ap.add_argument("--target-fps", type=int, default=30)
     ap.add_argument("--clear-cache", action="store_true")
+    # AIST++ trans (after the X-axis frame fix in the adapter) floats ~2m up, so ground it.
+    ap.add_argument("--no-offset-to-ground", dest="offset_to_ground", action="store_false")
+    ap.set_defaults(offset_to_ground=True)
     args = ap.parse_args()
 
     conf = AMASSDatasetConf([args.motion])
@@ -56,7 +59,7 @@ def main() -> int:
         "target_fps": args.target_fps,
         "solver": "daqp",
         "damping": 0.5,
-        "offset_to_ground": False,
+        "offset_to_ground": args.offset_to_ground,
         "use_velocity_limit": False,
         "verbose": False,
     }

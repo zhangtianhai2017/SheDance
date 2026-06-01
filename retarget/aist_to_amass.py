@@ -22,11 +22,17 @@ import os
 import pickle
 
 import numpy as np
+from scipy.spatial.transform import Rotation as Rot
 
 AIST_FPS = 60.0
 
+# AIST++ global frame differs from the AMASS/Z-up frame GMR expects by ~90deg about X:
+# without correction the retargeted body lies on the ground (root tipped ~85deg about X).
+# A +90deg rotation about X stands it upright (verified: root z ~0.9, body extent ~1.5).
+DEFAULT_ROT_X_DEG = 90.0
 
-def convert(pkl_path: str, out_npz: str) -> None:
+
+def convert(pkl_path: str, out_npz: str, rot_x_deg: float = DEFAULT_ROT_X_DEG) -> None:
     with open(pkl_path, "rb") as f:
         d = pickle.load(f)
 
@@ -40,6 +46,13 @@ def convert(pkl_path: str, out_npz: str) -> None:
 
     scaling = float(np.asarray(d["smpl_scaling"]).reshape(-1)[0])
     trans = np.asarray(d["smpl_trans"], dtype=np.float32) / scaling  # (N, 3) meters
+
+    # Coordinate-frame correction: rotate global orientation + translation about world X
+    # so AIST++ maps into the AMASS/Z-up frame GMR expects (otherwise body lies flat).
+    if rot_x_deg != 0.0:
+        rc = Rot.from_euler("x", rot_x_deg, degrees=True)
+        poses[:, :3] = (rc * Rot.from_rotvec(poses[:, :3])).as_rotvec().astype(np.float32)
+        trans = rc.apply(trans).astype(np.float32)
     # 16 betas (zeros = mean body) to match AMASS convention. The GMR SMPLH_Parser
     # is forced to num_betas=16 via monkeypatch in retarget_pop.py (the installed
     # GMR/loco code omits num_betas=16 at instantiation -> latent shapedirs(10) vs
@@ -62,5 +75,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--pkl", required=True, help="AIST++ motion .pkl path")
     ap.add_argument("--out", required=True, help="output AMASS-style .npz path")
+    ap.add_argument("--rot-x-deg", type=float, default=DEFAULT_ROT_X_DEG,
+                    help="degrees to rotate global orient+trans about world X (AIST++->AMASS frame)")
     args = ap.parse_args()
-    convert(args.pkl, args.out)
+    convert(args.pkl, args.out, rot_x_deg=args.rot_x_deg)
