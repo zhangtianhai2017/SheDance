@@ -7,10 +7,11 @@ import os
 import opensim as osim
 
 HERE = os.path.expanduser("~/shedance/osim")
+DANCE = os.environ.get("DANCE", "pop")
 MODEL = os.path.join(HERE, "cyclist_min.osim")
-TRC = os.path.join(HERE, "pop.trc")
+TRC = os.path.join(HERE, f"{DANCE}.trc")
 MODELM = os.path.join(HERE, "cyclist_min_markers.osim")
-OUTMOT = os.path.join(HERE, "pop_ik.mot")
+OUTMOT = os.path.join(HERE, f"{DANCE}_ik.mot")
 MARK = ["pelvis", "lumbar5", "femur_r", "femur_l", "tibia_r", "tibia_l",
         "talus_r", "talus_l", "calcn_r", "calcn_l", "toes_r", "toes_l",
         "humerus_r", "humerus_l", "ulna_r", "ulna_l", "radius_r", "radius_l"]

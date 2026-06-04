@@ -10,8 +10,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import mujoco
 from musclemimic.environments.humanoids import MyoFullBody
 
-CACHE = os.path.expanduser("~/.musclemimic/caches/AMASS/MyoFullBody/gmr/AIST/gPO_sBM_cAll_d10_mPO0_ch01.npz")
-OUT = os.path.expanduser("~/shedance/osim/pop.trc")
+DANCE = os.environ.get("DANCE", "pop")
+CACHE = os.environ.get("DANCE_CACHE") or os.path.expanduser(
+    "~/.musclemimic/caches/AMASS/MyoFullBody/gmr/AIST/gPO_sBM_cAll_d10_mPO0_ch01.npz")
+OUT = os.path.expanduser(f"~/shedance/osim/{DANCE}.trc")
 MARK = ["pelvis", "lumbar5", "femur_r", "femur_l", "tibia_r", "tibia_l",
         "talus_r", "talus_l", "calcn_r", "calcn_l", "toes_r", "toes_l",
         "humerus_r", "humerus_l", "ulna_r", "ulna_l", "radius_r", "radius_l"]

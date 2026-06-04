@@ -12,8 +12,9 @@ import sys, os
 import opensim as osim
 
 HERE = os.path.expanduser("~/shedance/osim")
+DANCE = os.environ.get("DANCE", "pop")
 MODEL = os.path.join(HERE, "cyclist_min.osim")
-MOT = os.path.join(HERE, "pop_ik.mot")
+MOT = os.path.join(HERE, f"{DANCE}_ik.mot")
 t0 = float(sys.argv[1]) if len(sys.argv) > 1 else 2.0
 t1 = float(sys.argv[2]) if len(sys.argv) > 2 else 2.5
 
@@ -39,7 +40,7 @@ for i in range(cs.getSize()):
 
 model.initSystem()
 print(f"coords={cs.getSize()} muscles={model.getMuscles().getSize()} forces={model.getForceSet().getSize()}", flush=True)
-MODELRES = os.path.join(HERE, "cyclist_with_reserves.osim")
+MODELRES = os.path.join(HERE, f"{DANCE}_reserves.osim")
 model.printToXML(MODELRES)
 
 # --- Static Optimization via AnalyzeTool loaded from FILE (robust path) ---
@@ -50,11 +51,11 @@ so.setActivationExponent(2.0)
 so.setUseMusclePhysiology(True)
 
 tool = osim.AnalyzeTool()
-tool.setName("pop_so")
+tool.setName(f"{DANCE}_so")
 tool.setModelFilename(MODELRES)
 tool.setInitialTime(t0); tool.setFinalTime(t1)
 tool.setCoordinatesFileName(MOT)
-_extl = os.path.join(HERE, "pop_grf_extloads.xml")
+_extl = os.path.join(HERE, f"{DANCE}_grf_extloads.xml")
 if os.path.exists(_extl):
     tool.setExternalLoadsFileName(_extl)   # GRF -> physiological leg muscles, zero pelvis residual
 tool.setLowpassCutoffFrequency(6.0)
