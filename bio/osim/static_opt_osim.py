@@ -13,6 +13,8 @@ import opensim as osim
 
 HERE = os.path.expanduser("~/shedance/osim")
 DANCE = os.environ.get("DANCE", "pop")
+FMAX = float(os.environ.get("FMAX_SCALE", "1.0"))         # <1.0 = weaker body (effort/vision version)
+TAG = "" if abs(FMAX - 1.0) < 1e-9 else f"_f{int(round(FMAX*100)):02d}"
 MODEL = os.path.join(HERE, "cyclist_min.osim")
 MOT = os.path.join(HERE, f"{DANCE}_ik.mot")
 t0 = float(sys.argv[1]) if len(sys.argv) > 1 else 2.0
@@ -38,9 +40,14 @@ for i in range(cs.getSize()):
     ca.setMinControl(-1e4); ca.setMaxControl(1e4)
     model.addForce(ca)
 
+if abs(FMAX - 1.0) > 1e-9:                # effort version: weaker muscles -> higher activation to track
+    mus = model.getMuscles()
+    for i in range(mus.getSize()):
+        mu = mus.get(i); mu.setMaxIsometricForce(mu.getMaxIsometricForce() * FMAX)
+
 model.initSystem()
-print(f"coords={cs.getSize()} muscles={model.getMuscles().getSize()} forces={model.getForceSet().getSize()}", flush=True)
-MODELRES = os.path.join(HERE, f"{DANCE}_reserves.osim")
+print(f"FMAX_SCALE={FMAX} coords={cs.getSize()} muscles={model.getMuscles().getSize()} forces={model.getForceSet().getSize()}", flush=True)
+MODELRES = os.path.join(HERE, f"{DANCE}{TAG}_reserves.osim")
 model.printToXML(MODELRES)
 
 # --- Static Optimization via AnalyzeTool loaded from FILE (robust path) ---
@@ -51,7 +58,7 @@ so.setActivationExponent(2.0)
 so.setUseMusclePhysiology(True)
 
 tool = osim.AnalyzeTool()
-tool.setName(f"{DANCE}_so")
+tool.setName(f"{DANCE}{TAG}_so")
 tool.setModelFilename(MODELRES)
 tool.setInitialTime(t0); tool.setFinalTime(t1)
 tool.setCoordinatesFileName(MOT)
