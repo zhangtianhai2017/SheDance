@@ -70,8 +70,11 @@ def main():
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     tmp = os.path.expanduser("~/shedance/renders/_mframes"); os.makedirs(tmp, exist_ok=True)
+    STEP = int(os.environ.get("RENDER_STEP", "1"))   # render every STEP-th frame (speed for long clips)
     nf = 0
     for fi, t in enumerate(tcol):
+        if fi % STEP != 0:
+            continue
         qi = int(round(t * freq))
         if qi < 0 or qi >= qpos.shape[0]: continue
         d.qpos[:] = qpos[qi]; d.qvel[:] = 0

@@ -12,8 +12,8 @@ import sys, os
 import opensim as osim
 
 HERE = os.path.expanduser("~/shedance/osim")
-MODEL = os.path.join(HERE, "cyclistFullBodyMuscle.osim")
-MOT = os.path.join(HERE, "pop.mot")
+MODEL = os.path.join(HERE, "cyclist_min.osim")
+MOT = os.path.join(HERE, "pop_ik.mot")
 t0 = float(sys.argv[1]) if len(sys.argv) > 1 else 2.0
 t1 = float(sys.argv[2]) if len(sys.argv) > 2 else 2.5
 
