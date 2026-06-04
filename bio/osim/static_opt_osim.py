@@ -54,6 +54,9 @@ tool.setName("pop_so")
 tool.setModelFilename(MODELRES)
 tool.setInitialTime(t0); tool.setFinalTime(t1)
 tool.setCoordinatesFileName(MOT)
+_extl = os.path.join(HERE, "pop_grf_extloads.xml")
+if os.path.exists(_extl):
+    tool.setExternalLoadsFileName(_extl)   # GRF -> physiological leg muscles, zero pelvis residual
 tool.setLowpassCutoffFrequency(6.0)
 tool.setResultsDir(HERE)
 tool.getAnalysisSet().cloneAndAppend(so)

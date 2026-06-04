@@ -58,6 +58,14 @@ MuJoCo qpos → trc_from_mujoco(关节中心.trc) → add_markers_and_ik(IK) →
 3. **Moco/CMC 算力随肌肉数爆 → 必须剪到 ~149**。
 4. 愿景在可行段以"努力"(激活)显现;"偏离"需更极端肌力/更高需求动作。
 
+## GRF 实验(部分成功,2026-06-04)
+
+`compute_grf.py`:F_grf=M(a_com−g) 按脚高分配 → OpenSim ExternalLoads(`pop_grf.mot`+`.xml`);
+`static_opt_osim.py` 自动接入(xml 存在时)。
+- ✅ **竖直体重平衡**(pelvis_ty 残差 780N→消失)、**腿肌激活 0.065→0.114(腿承重了)**。
+- ❌ **力矩残差大**(pelvis_list max 1427、某腿帧 441)= **COP 压心估得粗**(双脚支撑歧义)。
+- 结论:GRF 的力对了,**压心/力矩需 RRA 细化(深水区)**。主 demo 仍用无 GRF 的干净渲染。
+
 ## 下一步(未做 / 给回来的你)
 
 - **偏离版愿景**:F0.1 结果(在跑);或选更高难度动作段,看弱身体"够不到→动作变样"。
