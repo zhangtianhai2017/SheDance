@@ -33,6 +33,11 @@ ue/**/.vs/
 ue/TP_ThirdPerson/
 ue/robocopy.log
 
+# renders (mp4 already ignored; also exclude frame PNGs)
+renders/
+# scratch / temp scripts
+_tmp_*.py
+
 # OS
 .DS_Store
 Thumbs.db

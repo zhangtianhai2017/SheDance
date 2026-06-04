@@ -1,7 +1,23 @@
-# 生物力学逆向 · 无 RL · 自建 — 总体路线
+# 生物力学逆向 · 无 RL — 总体路线
 
 > 核心路线文档。2026-06-03 决策:**放弃 RL 训练肌肉,改用计算生物力学的逆向方法**确定性地
 > 从给定舞段算出肌肉激活。理由见下。关联:[compile_bottleneck_findings.md](compile_bottleneck_findings.md)。
+
+## ⚠️ 路线更新(2026-06-03 晚):自建 MuJoCo 逆向撞墙 → 转 OpenSim
+
+**自建 MuJoCo 逆向(下面阶段1-2)跑通了但撞墙**:所需关节力矩超肌肉能力 ~100 倍,肌肉只满足 3%。
+根因 = 手搓时 ① 排除膝耦合 DOF 削掉了股四头肌等的杠杆 ② 浮动基座 GRF/压心问题。两个廉价修法
+(GRF 雅可比抵消、重平滑、isometric)都排除了——是**结构性**的,需要成熟生物力学机制(约束投影动力学等)。
+
+**决策:转 OpenSim**(用户:用已有研究成果)。**已验证成功**:
+- 工具:`uv pip install opensim`(4.6)在 WSL/Linux **就带 Moco**(文档说没有是过时的);但 520 肌肉模型上 Moco 太慢,**用 Static Optimization**(per-frame)。
+- 模型:`cyclistFullBodyMuscle.osim`(与 MyoFullBody 同源,171 DOF/520 肌肉)。
+- 运动:qpos 按坐标名直接转 OpenSim `.mot`(姿态已验证正常)。
+- **结果**:OpenSim 正确处理膝/肩约束后,**肌肉产出全部关节力矩(腿/腰/臂储备≈0)**,27% 肌肉激活、峰值 1.0;
+  唯一大残差 pelvis_ty=776N=体重=缺 GRF(预期,可后补)。**手搓时的可行性病理消失。**
+
+代码:`bio/osim/`(convert_qpos_to_mot.py / static_opt_osim.py / analyze_so.py)。
+详见 memory `project-shedance-muscle-pipeline`。**下面阶段1-2 的自建逆向已弃,保留作历史与原理参考。**
 
 ## 为什么转(RL 路否决)
 
