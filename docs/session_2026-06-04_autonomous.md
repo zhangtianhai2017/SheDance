@@ -33,7 +33,8 @@
 
 | 文件 | 内容 |
 |------|------|
-| `renders/effort_vision.png` | 努力版愿景图(三档激活对比)——**核心证据** |
+| `renders/vision_sidebyside.png/.mp4` | **F0.2柔 vs F1.0常 并排肌肉上色**——弱身体大片肌肉发红(使劲)、常人发蓝(从容)。**最直观的愿景证据**(配色×4放大以显低激活差异) |
+| `renders/effort_vision.png` | 努力版愿景图(三档激活对比)——核心数据 |
 | `renders/pop_muscle_full.mp4` | 整段 Pop 肌肉驱动 + 上色(全片 SO) |
 | `renders/vision_f04_f10.mp4` | F0.4 vs F1.0 骨架叠加(动作几乎重合=同动作) |
 | `~/shedance/osim/pop_ik.mot` | 约定正确的全片运动(marker→IK 产) |

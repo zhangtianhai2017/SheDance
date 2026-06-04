@@ -16,7 +16,8 @@ from musclemimic.environments.humanoids import MyoFullBody
 CACHE = os.path.expanduser("~/.musclemimic/caches/AMASS/MyoFullBody/gmr/AIST/gPO_sBM_cAll_d10_mPO0_ch01.npz")
 STO = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/shedance/osim/pop_so_active_7.5_8.0_activation.sto")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.expanduser("~/shedance/renders/pop_muscle_active.mp4")
-W, H, FPS = 720, 960, 50
+W, H = 720, 960
+FPS = int(os.environ.get("RENDER_FPS", "50"))
 
 
 def gaussian_smooth(x, sigma=2.5, radius=6):
@@ -57,12 +58,13 @@ def main():
     so.flags[mujoco.mjtVisFlag.mjVIS_TENDON] = True
     act2ten = [int(m.actuator_trnid[i, 0]) for i in range(m.nu)]   # muscle -> its tendon id
 
+    GAIN = float(os.environ.get("COLOR_GAIN", "1.0"))   # amplify low activations for visibility
     def color_by_act():
         for i in range(m.nu):
             tid = act2ten[i]
             if 0 <= tid < m.ntendon:
                 a = float(d.act[i]) if i < d.act.shape[0] else 0.0
-                a = min(1.0, max(0.0, a))
+                a = min(1.0, max(0.0, a * GAIN))
                 m.tendon_rgba[tid] = [0.2 + 0.8 * a, 0.15 + 0.15 * a, 0.4 * (1 - a), 0.55 + 0.45 * a]
     cam = mujoco.MjvCamera(); cam.distance = 2.6; cam.elevation = -12; cam.azimuth = 120; cam.lookat[:] = [0, 0, 0.95]
     m.vis.global_.offwidth = W; m.vis.global_.offheight = H   # enlarge offscreen framebuffer
