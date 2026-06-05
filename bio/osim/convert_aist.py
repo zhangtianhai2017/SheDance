@@ -20,6 +20,15 @@ poses[:, :3] = (_Rx * R.from_rotvec(poses[:, :3])).as_rotvec()       # root glob
 trans = (_Rx.as_matrix() @ trans.T).T                                # root translation
 N = poses.shape[0]
 poses156 = np.zeros((N, 156)); poses156[:, :66] = poses[:, :66]      # body+wrists; fingers=0
+# AIST++ SMPL fits carry a SMPLify forward-flexion bias (rounded upper back + forward head) that the
+# dance does NOT intend. The input doesn't specify a baseline posture -> normalize to a good neutral one:
+# subtract the temporal mean of spine/neck/head (removes the systematic bias, keeps the dance dynamics).
+DEBIAS = float(os.environ.get("POSTURE_DEBIAS", "1.0"))
+if DEBIAS:
+    bj = poses156[:, :66].reshape(N, 22, 3)
+    for j in (3, 6, 9, 12, 15):    # spine1, spine2, spine3, neck, head
+        bj[:, j, :] -= DEBIAS * bj[:, j, :].mean(0, keepdims=True)
+    poses156[:, :66] = bj.reshape(N, 66)
 np.savez(out, poses=poses156, trans=trans, betas=np.zeros(16, float),
          gender="neutral", mocap_framerate=60.0)
-print(f"{seq}: {N} frames, scaling={scaling:.3f}, trans-range {np.ptp(trans,0).round(2)} m -> {out}")
+print(f"{seq}: {N} frames, scaling={scaling:.3f}, posture-debias={DEBIAS} -> {out}")
