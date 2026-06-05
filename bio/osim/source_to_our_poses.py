@@ -9,7 +9,7 @@ TRACK, HUM, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 FPS = float(os.environ.get("FPS", "30"))
 tr = np.load(TRACK, allow_pickle=True); KP = np.asarray(tr["keypoints_3d"], float)        # (T,70,3) camera
 KP = np.stack([KP[:, :, 0], KP[:, :, 2], -KP[:, :, 1]], -1)                                # -> world Z-up
-H = np.load(HUM, allow_pickle=True); restJ = np.asarray(H["joints"], float)[:24]          # SMPL rest joints (T-pose)
+H = np.load(HUM, allow_pickle=True); restJF = np.asarray(H["joints"], float); restJ = restJF[:24]   # SMPL-H rest joints (full 73 / body 24)
 T = len(KP)
 # SMPL 24-joint parents + the primary "aim child" (the bone each joint orients)
 PAR = [-1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 12, 13, 14, 16, 17, 18, 19, 20, 21]
@@ -45,6 +45,10 @@ def mkframe(fwd, up):          # [right|up|fwd] from forward + up (full orientat
     up = up / np.linalg.norm(up); fwd = fwd - fwd.dot(up) * up; fwd /= (np.linalg.norm(fwd) + 1e-9)
     right = np.cross(up, fwd); right /= (np.linalg.norm(right) + 1e-9)
     return np.column_stack([right, up, fwd])
+def handframe(fwd, up):        # [right|up|fwd], FWD primary (finger direction reliable; palm normal noisier)
+    fwd = fwd / (np.linalg.norm(fwd) + 1e-9); up = up - up.dot(fwd) * fwd
+    up /= (np.linalg.norm(up) + 1e-9); right = np.cross(up, fwd); right /= (np.linalg.norm(right) + 1e-9)
+    return np.column_stack([right, up, fwd])
 from scipy.spatial.transform import Rotation as R
 order = [3, 6, 9, 12, 15, 1, 4, 7, 10, 2, 5, 8, 11, 13, 16, 18, 20, 14, 17, 19, 21]
 poses = np.zeros((T, 156)); trans = np.zeros((T, 3))
@@ -61,6 +65,11 @@ for t in range(T):
             n = np.cross(k[big] - k[heel], k[sml] - k[heel])
             if n[2] < 0: n = -n
             Rg[j] = mkframe(k[big] - k[heel], n if np.linalg.norm(n) > 1e-6 else np.array([0.0, 0.0, 1.0]))
+        elif j in (20, 21):                                      # wrist: orient hand from source finger knuckles (faithful hand facing)
+            if j == 20: sw, smc, si, sp, rw, rmc, ri, rp = k[62], k[[49, 53, 57, 61]], k[49], k[61], restJF[20], restJF[[22, 25, 31, 28]], restJF[22], restJF[28]
+            else:       sw, smc, si, sp, rw, rmc, ri, rp = k[41], k[[28, 32, 36, 40]], k[28], k[40], restJF[21], restJF[[37, 40, 46, 43]], restJF[37], restJF[43]
+            Fs = handframe(smc.mean(0) - sw, np.cross(si - sw, sp - sw)); Fr = handframe(rmc.mean(0) - rw, np.cross(ri - rw, rp - rw))
+            Rg[j] = Fs @ Fr.T
         elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]
