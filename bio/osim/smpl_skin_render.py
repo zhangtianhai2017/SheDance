@@ -23,12 +23,20 @@ if GENDER or BETAS or ZEROPOSE:
         b = np.array([float(x) for x in BETAS.split(",")], float)
         bb = np.zeros(16, float); bb[:len(b)] = b; d["betas"] = bb
     if ZEROPOSE:
-        p = np.asarray(d["poses"], float); p[:, 3:66] = 0.0; d["poses"] = p   # zero body joints -> straight rest pose
+        p = np.asarray(d["poses"], float); p[:, 3:66] = 0.0
+        p[:, 0:3] = [np.pi / 2, 0, 0]   # clean upright standing root (no dance tilt) -> pure rest SHAPE
+        d["poses"] = p
     if os.environ.get("POSTURE_DEBIAS"):   # remove systematic spine/neck/head posture bias, keep dance dynamics
         amt = float(os.environ.get("POSTURE_DEBIAS"))
         p = np.asarray(d["poses"], float); bj = p[:, :66].reshape(len(p), 22, 3)
         for j in (3, 6, 9, 12, 15):        # spine1/2/3, neck, head
             bj[:, j, :] -= amt * bj[:, j, :].mean(0, keepdims=True)
+        p[:, :66] = bj.reshape(len(p), 66); d["poses"] = p
+    HEAD = float(os.environ.get("POSTURE_HEAD", "0"))   # active head retraction (deg, chin tuck)
+    if HEAD:
+        p = np.asarray(d["poses"], float); bj = p[:, :66].reshape(len(p), 22, 3)
+        bj[:, 12, 0] -= np.radians(HEAD)               # neck extension (X-) -> head slides back
+        bj[:, 15, 0] += np.radians(HEAD)               # head flexion (X+) -> re-level face (chin tuck)
         p[:, :66] = bj.reshape(len(p), 66); d["poses"] = p
     raw = "/tmp/_skin_patched.npz"; np.savez(raw, **d)
     print(f"override gender={GENDER} betas={BETAS} zeropose={bool(ZEROPOSE)}", flush=True)

@@ -28,7 +28,20 @@ if DEBIAS:
     bj = poses156[:, :66].reshape(N, 22, 3)
     for j in (3, 6, 9, 12, 15):    # spine1, spine2, spine3, neck, head
         bj[:, j, :] -= DEBIAS * bj[:, j, :].mean(0, keepdims=True)
+    # Head sits slightly forward in the SMPL rest (and SMPL has a single neck joint -> no cervical curve).
+    # Retract it (chin tuck) for a good upright posture: neck extends back, head re-levels the face.
+    HEAD = float(os.environ.get("POSTURE_HEAD", "10"))
+    bj[:, 12, 0] -= np.radians(HEAD * DEBIAS)   # neck extension -> head slides back
+    bj[:, 15, 0] += np.radians(HEAD * DEBIAS)   # head flexion -> re-level face
     poses156[:, :66] = bj.reshape(N, 66)
+    # ROOT (pelvis) lean: the dominant forward-tilt. Bring the body's MEAN up-axis back to vertical
+    # (removes the systematic lean) while preserving yaw/facing and per-frame sway.
+    roots = R.from_rotvec(poses156[:, 0:3])
+    up = roots.apply([0.0, 1.0, 0.0]).mean(0); up /= np.linalg.norm(up)   # mean body-up in world
+    ax = np.cross(up, [0.0, 0.0, 1.0]); n = np.linalg.norm(ax)            # world up = +Z (after +90 X)
+    if n > 1e-6:
+        corr = R.from_rotvec(ax / n * np.arccos(np.clip(up[2], -1, 1)) * DEBIAS)
+        poses156[:, 0:3] = (corr * roots).as_rotvec()
 np.savez(out, poses=poses156, trans=trans, betas=np.zeros(16, float),
          gender="neutral", mocap_framerate=60.0)
 print(f"{seq}: {N} frames, scaling={scaling:.3f}, posture-debias={DEBIAS} -> {out}")
