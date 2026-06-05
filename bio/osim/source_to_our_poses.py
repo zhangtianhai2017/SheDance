@@ -56,8 +56,11 @@ for t in range(T):
         p = PAR[j]
         if j == 15:                                              # head: face-forward full frame (nose+ears), not swing
             em = 0.5 * (k[3] + k[4]); Rg[j] = mkframe(k[0] - em, em - k[69])
-        elif j in (7, 8):                                        # ankle: flat-foot frame (heel->toe fwd, world up)
-            toe, heel = (15, 17) if j == 7 else (18, 20); Rg[j] = mkframe(k[toe] - k[heel], np.array([0.0, 0.0, 1.0]))
+        elif j in (7, 8):                                        # ankle: real foot-plane frame (heel->toe fwd, sole normal up)
+            big, sml, heel = (15, 16, 17) if j == 7 else (18, 19, 20)
+            n = np.cross(k[big] - k[heel], k[sml] - k[heel])
+            if n[2] < 0: n = -n
+            Rg[j] = mkframe(k[big] - k[heel], n if np.linalg.norm(n) > 1e-6 else np.array([0.0, 0.0, 1.0]))
         elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]
