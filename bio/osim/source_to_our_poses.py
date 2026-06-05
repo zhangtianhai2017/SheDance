@@ -41,16 +41,24 @@ def frame(j0, jr, jl, jup):    # build an orth0normal frame from hip-line + up
     right = jr - jl; right /= np.linalg.norm(right); up = jup - j0; up -= up.dot(right) * right
     up /= np.linalg.norm(up); fwd = np.cross(right, up)
     return np.stack([right, up, fwd], 1)
+def mkframe(fwd, up):          # [right|up|fwd] from forward + up (full orientation for head/feet)
+    up = up / np.linalg.norm(up); fwd = fwd - fwd.dot(up) * up; fwd /= (np.linalg.norm(fwd) + 1e-9)
+    right = np.cross(up, fwd); right /= (np.linalg.norm(right) + 1e-9)
+    return np.column_stack([right, up, fwd])
 from scipy.spatial.transform import Rotation as R
 order = [3, 6, 9, 12, 15, 1, 4, 7, 10, 2, 5, 8, 11, 13, 16, 18, 20, 14, 17, 19, 21]
 poses = np.zeros((T, 156)); trans = np.zeros((T, 3))
 restF0 = frame(restJ[0], restJ[2], restJ[1], restJ[3])
 for t in range(T):
-    sJ = srcJ(KP[t]); Rg = [np.eye(3)] * 24
+    sJ = srcJ(KP[t]); k = KP[t]; Rg = [np.eye(3)] * 24
     Rg[0] = frame(sJ[0], sJ[2], sJ[1], sJ[3]) @ restF0.T          # root: rest pelvis frame -> source
     for j in order:
         p = PAR[j]
-        if j in AIM:
+        if j == 15:                                              # head: face-forward full frame (nose+ears), not swing
+            em = 0.5 * (k[3] + k[4]); Rg[j] = mkframe(k[0] - em, em - k[69])
+        elif j in (7, 8):                                        # ankle: flat-foot frame (heel->toe fwd, world up)
+            toe, heel = (15, 17) if j == 7 else (18, 20); Rg[j] = mkframe(k[toe] - k[heel], np.array([0.0, 0.0, 1.0]))
+        elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]
         else:
