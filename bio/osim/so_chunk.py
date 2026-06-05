@@ -5,7 +5,7 @@ Args: t0 t1 tag"""
 import sys, os
 import opensim as osim
 HERE = os.path.expanduser("~/shedance/osim")
-MODEL = os.path.join(HERE, "cyclist_min_reserves.osim")
+MODEL = os.environ.get("SO_MODEL") or os.path.join(HERE, "cyclist_min_reserves.osim")
 MOT = os.environ.get("CHUNK_MOT") or os.path.join(HERE, "pop60.mot")
 t0, t1, tag = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
 

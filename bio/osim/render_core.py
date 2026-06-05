@@ -75,7 +75,9 @@ class RenderCtx:
         self.rend = mujoco.Renderer(m, height=H, width=W)
         self.opt = mujoco.MjvOption(); self.opt.flags[mujoco.mjtVisFlag.mjVIS_TENDON] = True
         self.cam = mujoco.MjvCamera()
-        self.cam.distance = 2.6; self.cam.elevation = -12; self.cam.azimuth = 120
+        self.cam.distance = float(os.environ.get("RENDER_DIST", "2.6"))
+        self.cam.elevation = float(os.environ.get("RENDER_EL", "-12"))
+        self.cam.azimuth = float(os.environ.get("RENDER_AZ", "120"))   # tunable 3/4 angle
         self.cam.lookat[:] = [0, 0, 0.95]
 
     def frames_in_range(self, t0=None, t1=None, step=1):
