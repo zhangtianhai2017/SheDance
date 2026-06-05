@@ -13,7 +13,18 @@ from general_motion_retargeting.utils.smpl import load_smplh_file
 
 raw, out = sys.argv[1], sys.argv[2]
 fps = int(sys.argv[3]) if len(sys.argv) > 3 else 60
-sd, bm, so, h = load_smplh_file(raw, os.path.expanduser("~/shedance/smpl_models"))
+MODELS = os.path.expanduser("~/shedance/smpl_models")
+GENDER = os.environ.get("GENDER"); BETAS = os.environ.get("BETAS")   # override source body shape
+if GENDER or BETAS:
+    d = dict(np.load(raw, allow_pickle=True))
+    if GENDER:
+        d["gender"] = GENDER
+    if BETAS:
+        b = np.array([float(x) for x in BETAS.split(",")], float)
+        bb = np.zeros(16, float); bb[:len(b)] = b; d["betas"] = bb
+    raw = "/tmp/_skin_patched.npz"; np.savez(raw, **d)
+    print(f"override gender={GENDER} betas={BETAS}", flush=True)
+sd, bm, so, h = load_smplh_file(raw, MODELS)
 V = np.asarray(so.vertices, float); F = np.asarray(bm.faces)
 W, Hh = 480, 700
 exts = V.max(1) - V.min(1)                       # (N,3) per-frame extents
