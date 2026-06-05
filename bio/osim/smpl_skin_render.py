@@ -14,16 +14,24 @@ from general_motion_retargeting.utils.smpl import load_smplh_file
 raw, out = sys.argv[1], sys.argv[2]
 fps = int(sys.argv[3]) if len(sys.argv) > 3 else 60
 MODELS = os.path.expanduser("~/shedance/smpl_models")
-GENDER = os.environ.get("GENDER"); BETAS = os.environ.get("BETAS")   # override source body shape
-if GENDER or BETAS:
+GENDER = os.environ.get("GENDER"); BETAS = os.environ.get("BETAS"); ZEROPOSE = os.environ.get("ZEROPOSE")
+if GENDER or BETAS or ZEROPOSE:
     d = dict(np.load(raw, allow_pickle=True))
     if GENDER:
         d["gender"] = GENDER
     if BETAS:
         b = np.array([float(x) for x in BETAS.split(",")], float)
         bb = np.zeros(16, float); bb[:len(b)] = b; d["betas"] = bb
+    if ZEROPOSE:
+        p = np.asarray(d["poses"], float); p[:, 3:66] = 0.0; d["poses"] = p   # zero body joints -> straight rest pose
+    if os.environ.get("POSTURE_DEBIAS"):   # remove systematic spine/neck/head posture bias, keep dance dynamics
+        amt = float(os.environ.get("POSTURE_DEBIAS"))
+        p = np.asarray(d["poses"], float); bj = p[:, :66].reshape(len(p), 22, 3)
+        for j in (3, 6, 9, 12, 15):        # spine1/2/3, neck, head
+            bj[:, j, :] -= amt * bj[:, j, :].mean(0, keepdims=True)
+        p[:, :66] = bj.reshape(len(p), 66); d["poses"] = p
     raw = "/tmp/_skin_patched.npz"; np.savez(raw, **d)
-    print(f"override gender={GENDER} betas={BETAS}", flush=True)
+    print(f"override gender={GENDER} betas={BETAS} zeropose={bool(ZEROPOSE)}", flush=True)
 sd, bm, so, h = load_smplh_file(raw, MODELS)
 V = np.asarray(so.vertices, float); F = np.asarray(bm.faces)
 W, Hh = 480, 700
