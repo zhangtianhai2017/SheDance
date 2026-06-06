@@ -1,6 +1,7 @@
-# SheDance 数据格式契约 (v1.1)
+# SheDance 数据格式契约 (v1.2)
 
-> v1.1 新增:`joints_world.npz` 里多了 `joint_world_rot`(每关节世界旋转,四元数),用于扭转/转头。
+> v1.1:`joints_world.npz` 多了 `joint_world_rot`(每关节世界旋转,四元数),用于扭转/转头。
+> v1.2:再加 `joint_world_rot_rest`(零 pose 的每关节世界旋转 = 重定向基准 S_rest,抵消 Y-up→Z-up 那 90°)。
 
 > 给消费方:**以此为准写消费代码**。本文锁定的是**格式(format)**;具体数值(betas、体态、某段动作)后续会更新,但下面的字段结构、命名、单位、稳定性承诺**不变**。
 
@@ -18,6 +19,7 @@
 **② `<dance>_joints_world.npz` — 关节世界坐标(开箱即用,无需 smplx)**
 - `joints_world` (T,N,3) float32 —— 世界系米,Z 轴朝上(N = `joint_names` 长度)
 - `joint_world_rot` (T,N,4) float32 —— **每关节世界旋转,四元数 xyzw**,与 `joints_world` 同坐标系(右手 Z-up),N 与 `joint_names` 对齐;用于扭转(roll)/单独转头。`left_hand/right_hand` 取对应手腕旋转。自描述:`rot_format`="quat_xyzw",`frame`="world_right_handed_Zup_meters"。
+- `joint_world_rot_rest` (N,4) float32 —— 零 pose 的每关节世界旋转 = 重定向基准 `S_rest`;同坐标系(右手 Z-up);**所有关节相同** = Y-up→Z-up 对齐 = `Rx(+90°)` = [0.707,0,0,0.707]。重定向用 `S_cur·S_rest⁻¹` 抵消基准(否则整体倒 90°)。
 - `joint_names` (N,) str —— ★**权威**。当前 N=24:身体 0–21(骨盆…双腕)+ `left_hand`/`right_hand`(手心点)
 - `parents` (N,) int —— 父索引(建层级/连骨架用) · `fps` float
 

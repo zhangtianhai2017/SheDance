@@ -27,7 +27,12 @@ for t in range(T):
     for j in range(22):
         JWR[t, j] = R.from_matrix(Gr[j]).as_quat()           # world rotation, quaternion xyzw, same frame as joints_world
     JWR[t, 22] = R.from_matrix(Gr[20]).as_quat(); JWR[t, 23] = R.from_matrix(Gr[21]).as_quat()   # hands rigid w/ wrists
+# REST baseline: SMPL zero-pose => every joint's GLOBAL rotation is identity in canonical (Y-up);
+# in our world (Z-up) every joint therefore shares the single Y-up->Z-up alignment Rx(+90deg).
+MALIGN = R.from_rotvec(np.array([np.pi / 2.0, 0.0, 0.0])).as_quat()        # xyzw
+JWRR = np.tile(MALIGN.astype(np.float32), (24, 1))                          # (24,4) joint_world_rot_rest
 np.savez(OUT, joints_world=JW.astype(np.float32), joint_world_rot=JWR.astype(np.float32),
+         joint_world_rot_rest=JWRR,
          rot_format=np.array("quat_xyzw"), frame=np.array("world_right_handed_Zup_meters"),
          joint_names=np.array(NAMES), parents=np.array(PAR), fps=FPS)
 dl = np.linalg.norm(JW[:, 22] - JW[:, 20], axis=1).mean(); dr = np.linalg.norm(JW[:, 23] - JW[:, 21], axis=1).mean()
