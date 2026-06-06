@@ -1,4 +1,6 @@
-# SheDance 数据格式契约 (v1)
+# SheDance 数据格式契约 (v1.1)
+
+> v1.1 新增:`joints_world.npz` 里多了 `joint_world_rot`(每关节世界旋转,四元数),用于扭转/转头。
 
 > 给消费方:**以此为准写消费代码**。本文锁定的是**格式(format)**;具体数值(betas、体态、某段动作)后续会更新,但下面的字段结构、命名、单位、稳定性承诺**不变**。
 
@@ -15,6 +17,7 @@
 
 **② `<dance>_joints_world.npz` — 关节世界坐标(开箱即用,无需 smplx)**
 - `joints_world` (T,N,3) float32 —— 世界系米,Z 轴朝上(N = `joint_names` 长度)
+- `joint_world_rot` (T,N,4) float32 —— **每关节世界旋转,四元数 xyzw**,与 `joints_world` 同坐标系(右手 Z-up),N 与 `joint_names` 对齐;用于扭转(roll)/单独转头。`left_hand/right_hand` 取对应手腕旋转。自描述:`rot_format`="quat_xyzw",`frame`="world_right_handed_Zup_meters"。
 - `joint_names` (N,) str —— ★**权威**。当前 N=24:身体 0–21(骨盆…双腕)+ `left_hand`/`right_hand`(手心点)
 - `parents` (N,) int —— 父索引(建层级/连骨架用) · `fps` float
 
