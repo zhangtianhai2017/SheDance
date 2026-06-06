@@ -41,3 +41,7 @@ _tmp_*.py
 # OS
 .DS_Store
 Thumbs.db
+
+# big offline env bundle - never push (GitHub 100MB/file limit)
+SheDance_PhysioSim_Handoff.zip
+physiosim_handoff/
