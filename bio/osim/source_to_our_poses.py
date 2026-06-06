@@ -80,5 +80,5 @@ for t in range(T):
         poses[t, 3 * j:3 * j + 3] = R.from_matrix(Rg[p].T @ Rg[j]).as_rotvec()
     poses[t, 0:3] = R.from_matrix(Rg[0]).as_rotvec()
     trans[t] = sJ[0]
-np.savez(OUT, poses=poses, trans=trans, betas=np.array([0, 3] + [0] * 14, float), gender="female", mocap_framerate=FPS)
+np.savez(OUT, poses=poses, trans=trans, betas=np.array([-2, 2] + [0] * 14, float), gender="female", mocap_framerate=FPS)
 print(f"our-humanoid poses {poses.shape} @ {FPS}Hz -> {OUT}", flush=True)
