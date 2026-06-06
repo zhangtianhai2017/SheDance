@@ -70,6 +70,8 @@ for t in range(T):
             else:       sw, smc, si, sp, rw, rmc, ri, rp = k[41], k[[28, 32, 36, 40]], k[28], k[40], restJF[21], restJF[[37, 40, 46, 43]], restJF[37], restJF[43]
             Fs = handframe(smc.mean(0) - sw, np.cross(si - sw, sp - sw)); Fr = handframe(rmc.mean(0) - rw, np.cross(ri - rw, rp - rw))
             Rg[j] = Fs @ Fr.T
+        elif j in (3, 6, 9, 12):                                  # spine1/2/3 + neck: the 70-keypoint source has NO mid-spine points (srcJ interpolates them on the straight pelvis->neck line), so the per-joint AIM force-bent OUR spine into a fixed swayback (lordosis / belly-forward, std~=0). Keep OUR natural rest spine curve instead; the torso leans via the root (the real dance lean).
+            Rg[j] = Rg[p]
         elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]
