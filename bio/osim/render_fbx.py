@@ -33,6 +33,10 @@ cam.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
 sc.camera = cam
 sun = bpy.data.objects.new("S", bpy.data.lights.new("S", "SUN")); sc.collection.objects.link(sun)
 sun.data.energy = 3.0; sun.rotation_euler = (0.6, 0.2, 0.5)
+bpy.ops.mesh.primitive_plane_add(size=max(8.0, size * 4), location=(center.x, center.y, 0.0))   # ground at Z=0
+gp = bpy.context.active_object; gm = bpy.data.materials.new("ground"); gm.use_nodes = True
+gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.28, 0.30, 0.34, 1)
+gp.data.materials.append(gm)
 
 mat = bpy.data.materials.new("body"); mat.use_nodes = True
 b = mat.node_tree.nodes["Principled BSDF"]; b.inputs["Base Color"].default_value = (0.8, 0.55, 0.5, 1); b.inputs["Roughness"].default_value = 0.6

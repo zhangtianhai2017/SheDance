@@ -36,6 +36,31 @@ w22 = w52[:, :N].copy()
 w22[:, 20] += w52[:, 22:37].sum(1)                  # left fingers (22-36) -> left_wrist
 w22[:, 21] += w52[:, 37:52].sum(1)                  # right fingers (37-51) -> right_wrist
 
+# ---- floor-align: lowest SKINNED-MESH point over the clip -> Z=0, + frame0 horizontal -> origin.
+# LBS is equivariant under a global rigid shift of (bind skel, bind mesh, pose skel), so shifting all
+# three by the same s grounds the animation cleanly. dz from the posed mesh (not joints) => no sole sink.
+def _q2m(q):                                         # (M,4) xyzw -> (M,3,3)
+    q = q / (np.linalg.norm(q, axis=-1, keepdims=True) + 1e-12)
+    x, y, z, w = q[:, 0], q[:, 1], q[:, 2], q[:, 3]; m = np.empty((q.shape[0], 3, 3))
+    m[:, 0, 0] = 1-2*(y*y+z*z); m[:, 0, 1] = 2*(x*y-z*w); m[:, 0, 2] = 2*(x*z+y*w)
+    m[:, 1, 0] = 2*(x*y+z*w); m[:, 1, 1] = 1-2*(x*x+z*z); m[:, 1, 2] = 2*(y*z-x*w)
+    m[:, 2, 0] = 2*(x*z-y*w); m[:, 2, 1] = 2*(y*z+x*w); m[:, 2, 2] = 1-2*(x*x+y*y); return m
+vrest_h = np.concatenate([verts_world, np.ones((verts_world.shape[0], 1))], axis=1)
+Grest = np.tile(np.eye(4), (N, 1, 1)); Grest[:, :3, :3] = RX90_np; Grest[:, :3, 3] = rest_world
+Grest_inv = np.linalg.inv(Grest)
+if MODE in ("anim", "test"):
+    minz = 1e18
+    for t in range(T):
+        Gp = np.tile(np.eye(4), (N, 1, 1)); Gp[:, :3, :3] = _q2m(JWR[t, :N]); Gp[:, :3, 3] = JW[t, :N]
+        row2 = (Gp @ Grest_inv)[:, 2, :]                     # (N,4) Z-row of each bone LBS transform
+        minz = min(minz, float(((vrest_h @ row2.T) * w22).sum(1).min()))
+    SH = np.array([-float(JW[0, 0, 0]), -float(JW[0, 0, 1]), -minz])
+    JW = JW + SH
+else:                                                # rest: ground the bind mesh itself
+    SH = np.array([-float(rest_world[0, 0]), -float(rest_world[0, 1]), -float(verts_world[:, 2].min())])
+rest_world = rest_world + SH; verts_world = verts_world + SH
+print("FLOOR shift dx=%.3f dy=%.3f dz=%.3f (mode %s)" % (SH[0], SH[1], SH[2], MODE))
+
 def quat_wxyz(q):
     return Quaternion((q[3], q[0], q[1], q[2]))
 
