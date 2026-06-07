@@ -5,7 +5,9 @@ Usage: blender_python render_fbx.py <fbx> <out_dir> [n_frames]"""
 import sys, os, bpy
 from mathutils import Vector
 FBX, OUT_DIR = sys.argv[-3], sys.argv[-2]
-NF = int(sys.argv[-1]) if sys.argv[-1].isdigit() else 12
+LAST = sys.argv[-1]
+RANGE = [int(x) for x in LAST.split(":")] if ":" in LAST else None      # "a:b:step" -> consecutive window
+NF = int(LAST) if LAST.isdigit() else 12
 os.makedirs(OUT_DIR, exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -35,7 +37,10 @@ sun = bpy.data.objects.new("S", bpy.data.lights.new("S", "SUN")); sc.collection.
 sun.data.energy = 3.0; sun.rotation_euler = (0.6, 0.2, 0.5)
 bpy.ops.mesh.primitive_plane_add(size=max(8.0, size * 4), location=(center.x, center.y, 0.0))   # ground at Z=0
 gp = bpy.context.active_object; gm = bpy.data.materials.new("ground"); gm.use_nodes = True
-gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.28, 0.30, 0.34, 1)
+nt = gm.node_tree; chk = nt.nodes.new("ShaderNodeTexChecker")     # grid floor -> foot-vs-floor slide visible
+chk.inputs["Scale"].default_value = 16.0
+chk.inputs["Color1"].default_value = (0.36, 0.37, 0.40, 1); chk.inputs["Color2"].default_value = (0.20, 0.21, 0.24, 1)
+nt.links.new(chk.outputs["Color"], nt.nodes["Principled BSDF"].inputs["Base Color"])
 gp.data.materials.append(gm)
 
 mat = bpy.data.materials.new("body"); mat.use_nodes = True
@@ -46,7 +51,11 @@ world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.06, 0.06,
 sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 16    # CPU: no GL needed (headless WSL)
 sc.render.resolution_x = 512; sc.render.resolution_y = 640; sc.render.film_transparent = False
 
-frames = [f0 + round(i * (f1 - f0) / max(1, NF - 1)) for i in range(NF)]
+if RANGE:
+    a = max(f0, RANGE[0]); b = min(f1, RANGE[1]) if len(RANGE) > 1 else f1; st = RANGE[2] if len(RANGE) > 2 else 1
+    frames = list(range(a, b + 1, max(1, st)))
+else:
+    frames = [f0 + round(i * (f1 - f0) / max(1, NF - 1)) for i in range(NF)]
 for k, f in enumerate(frames):
     sc.frame_set(f)
     sc.render.filepath = os.path.join(OUT_DIR, "f%03d_frame%04d.png" % (k, f))

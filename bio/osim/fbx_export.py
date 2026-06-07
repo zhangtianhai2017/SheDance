@@ -54,7 +54,8 @@ if MODE in ("anim", "test"):
         Gp = np.tile(np.eye(4), (N, 1, 1)); Gp[:, :3, :3] = _q2m(JWR[t, :N]); Gp[:, :3, 3] = JW[t, :N]
         row2 = (Gp @ Grest_inv)[:, 2, :]                     # (N,4) Z-row of each bone LBS transform
         minz = min(minz, float(((vrest_h @ row2.T) * w22).sum(1).min()))
-    SH = np.array([-float(JW[0, 0, 0]), -float(JW[0, 0, 1]), -minz])
+    lf0 = 10 if JW[0, 10, 2] < JW[0, 11, 2] else 11        # initial-contact foot (lower toe at frame 0)
+    SH = np.array([-float(JW[0, lf0, 0]), -float(JW[0, lf0, 1]), -minz])   # origin = floor(Z=0) + initial contact point
     JW = JW + SH
 else:                                                # rest: ground the bind mesh itself
     SH = np.array([-float(rest_world[0, 0]), -float(rest_world[0, 1]), -float(verts_world[:, 2].min())])
