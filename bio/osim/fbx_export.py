@@ -1,93 +1,129 @@
 #!/usr/bin/env python3
-"""Export a generic SMPL-body FBX (skeleton + baked animation) from our joints_world data, via headless bpy.
-World-driving: each bone's WORLD matrix per frame = (joint_world_rot, joints_world) -> exact match to our data,
-independent of bone rest roll. 22 body bones (SMPL 0-21, names = SMPL-X body names). No fingers (dance1).
+"""Export a SKINNED SMPL-body FBX (skeleton + skinned mesh + baked animation) from our joints_world,
+via headless bpy. UE needs a skinned mesh to make a SkeletalMesh + to run the IK Retargeter (source_mesh
+is mandatory), so skeleton-only is not importable.
 
-Usage: blender_python fbx_export.py <joints_world.npz> <our_humanoid.npz> <out.fbx> <mode>
-  mode = test | anim | rest
-Coords in: world right-handed Z-up meters (our data). FBX exported Z-up / X-forward; units documented by caller.
+22 body bones (SMPL 0-21, SMPL-X body names). Bone REST rotation = Rx(+90deg) for ALL bones, because SMPL
+zero-pose has identity joint global rotation in canonical (Y-up) -> Rx90 in world; this makes the standard
+SMPL skinning weights deform correctly (LBS: M[j] = G_pose[j] @ G_rest[j]^-1, G_rest rotation must be Rx90).
+Animation = world-driving (pose_bone.matrix per frame from joint_world_rot/joints_world); positions exact.
+Mesh = our_humanoid verts/faces (betas [-2,2] female) + SMPL-H weights folded fingers->wrists -> 22 groups.
+
+Usage: blender_python fbx_export.py <joints_world.npz> <our_humanoid.npz> <out.fbx> <test|anim|rest>
 """
-import sys, numpy as np
-import bpy
+import sys, numpy as np, bpy
 from mathutils import Matrix, Quaternion, Vector
 
 JW_NPZ, HUM_NPZ, OUT_FBX, MODE = sys.argv[-4], sys.argv[-3], sys.argv[-2], sys.argv[-1]
-N = 22                                              # body bones only (SMPL 0-21)
-RX90 = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)   # +90deg about X: canonical Y-up -> world Z-up
+PKL = "/mnt/c/work/2026/Claude/SheDance/backup/smpl/SMPLH_NEUTRAL.pkl"   # for skin weights (6890x52)
+N = 22
+RX90_np = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)            # canonical Y-up -> world Z-up
+RX90_M = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 
 z = np.load(JW_NPZ, allow_pickle=True)
-JW = z["joints_world"].astype(float)               # (T,24,3) world positions
-JWR = z["joint_world_rot"].astype(float)           # (T,24,4) world rot, xyzw
-NAMES = [str(x) for x in z["joint_names"]][:N]
-PAR = [int(x) for x in z["parents"]][:N]
+JW = z["joints_world"].astype(float); JWR = z["joint_world_rot"].astype(float)
+NAMES = [str(x) for x in z["joint_names"]][:N]; PAR = [int(x) for x in z["parents"]][:N]
 FPS = float(z["fps"]); T = JW.shape[0]
-restJ = np.load(HUM_NPZ, allow_pickle=True)["joints"].astype(float)[:N]   # canonical rest joints (Y-up)
-rest_world = (RX90 @ restJ.T).T                     # standing rest skeleton in world Z-up
+hum = np.load(HUM_NPZ, allow_pickle=True)
+restJ = hum["joints"].astype(float)[:N]
+verts = hum["vertices"].astype(float); faces = hum["faces"].astype(int)
+rest_world = (RX90_np @ restJ.T).T
+verts_world = (RX90_np @ verts.T).T
 
-def quat_wxyz(q_xyzw):                              # our xyzw -> mathutils wxyz
-    return Quaternion((q_xyzw[3], q_xyzw[0], q_xyzw[1], q_xyzw[2]))
+import pickle
+w52 = np.asarray(pickle.load(open(PKL, "rb"), encoding="latin1")["weights"], float)   # (6890,52)
+w22 = w52[:, :N].copy()
+w22[:, 20] += w52[:, 22:37].sum(1)                  # left fingers (22-36) -> left_wrist
+w22[:, 21] += w52[:, 37:52].sum(1)                  # right fingers (37-51) -> right_wrist
 
-# ---- fresh scene + armature ----
+def quat_wxyz(q):
+    return Quaternion((q[3], q[0], q[1], q[2]))
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = int(round(FPS))
-arm = bpy.data.armatures.new("SMPL"); obj = bpy.data.objects.new("SMPL", arm)
-bpy.context.scene.collection.objects.link(obj)
-bpy.context.view_layer.objects.active = obj; obj.select_set(True)
 
+# ---- armature: Rx90-rest bones ----
+arm = bpy.data.armatures.new("SMPL"); arm_obj = bpy.data.objects.new("SMPL", arm)
+bpy.context.scene.collection.objects.link(arm_obj)
+bpy.context.view_layer.objects.active = arm_obj; arm_obj.select_set(True)
 bpy.ops.object.mode_set(mode="EDIT")
 ebs = []
 for j in range(N):
-    eb = arm.edit_bones.new(NAMES[j])
-    eb.head = Vector(rest_world[j])
-    # tail: toward first child if any, else continue parent->this direction (leaf stub)
-    children = [c for c in range(N) if PAR[c] == j]
-    if children:
-        eb.tail = Vector(rest_world[children[0]])
-    else:
-        d = rest_world[j] - rest_world[PAR[j]] if PAR[j] >= 0 else np.array([0, 0, 0.1])
-        nd = d / (np.linalg.norm(d) + 1e-9)
-        eb.tail = Vector(rest_world[j] + nd * 0.10)
+    eb = arm.edit_bones.new(NAMES[j]); eb.use_connect = False
+    eb.head = Vector(rest_world[j]); eb.tail = Vector(rest_world[j]) + Vector((0, 0, 0.10))
+    M = RX90_M.copy(); M.translation = Vector(rest_world[j]); eb.matrix = M   # enforce Rx90 rest rotation
     ebs.append(eb)
 for j in range(N):
     if PAR[j] >= 0:
         ebs[j].parent = ebs[PAR[j]]
+bpy.ops.object.mode_set(mode="OBJECT")
+
+# ---- skinned mesh ----
+mesh = bpy.data.meshes.new("SMPL_body")
+mesh.from_pydata([Vector(v) for v in verts_world], [], [list(map(int, f)) for f in faces])
+mesh.update()
+mo = bpy.data.objects.new("SMPL_body", mesh); bpy.context.scene.collection.objects.link(mo)
+vgs = [mo.vertex_groups.new(name=NAMES[j]) for j in range(N)]
+for v in range(verts_world.shape[0]):
+    for j in range(N):
+        wv = w22[v, j]
+        if wv > 1e-4:
+            vgs[j].add([v], float(wv), "REPLACE")
+mo.parent = arm_obj
+mod = mo.modifiers.new("Armature", "ARMATURE"); mod.object = arm_obj
+
+bpy.context.view_layer.objects.active = arm_obj
 bpy.ops.object.mode_set(mode="POSE")
-for pb in obj.pose.bones:
+for pb in arm_obj.pose.bones:
     pb.rotation_mode = "QUATERNION"
 
 def pose_frame(t):
-    for j in range(N):                              # hierarchy order (parents first; PAR[j] < j in SMPL)
+    for j in range(N):
         M = Matrix.LocRotScale(Vector(JW[t, j]), quat_wxyz(JWR[t, j]), Vector((1, 1, 1)))
-        obj.pose.bones[NAMES[j]].matrix = M
-        bpy.context.view_layer.update()             # child must see parent's NEW matrix, else chain compounds wrong
+        arm_obj.pose.bones[NAMES[j]].matrix = M
+        bpy.context.view_layer.update()
 
-if MODE == "rest":
-    pass                                            # edit rest IS the standing rest skeleton; export as-is
-elif MODE == "test":
-    errs = []
+if MODE == "test":
+    # 1) head positions exact?  2) skinning matches my own SMPL-LBS?
+    G_rest = [Matrix.LocRotScale(Vector(rest_world[j]), RX90_M.to_quaternion(), Vector((1, 1, 1))) for j in range(N)]
+    herr = []; derr = []
+    dg = bpy.context.evaluated_depsgraph_get()
     for t in (0, T // 2, T - 1):
         pose_frame(t)
         for j in range(N):
-            errs.append(np.linalg.norm(np.array(obj.pose.bones[NAMES[j]].head) - JW[t, j]))
-    print("TEST max head-pos error vs joints_world: %.4f mm" % (max(errs) * 1000))
-    print("TEST bones=%d frames-checked=3 names0..3=%s" % (N, NAMES[:4]))
-else:                                               # anim: bake all frames
+            herr.append((Vector(arm_obj.pose.bones[NAMES[j]].head) - Vector(JW[t, j])).length)
+        dg.update()
+        meval = mo.evaluated_get(dg).data
+        Gp = [Matrix.LocRotScale(Vector(JW[t, j]), quat_wxyz(JWR[t, j]), Vector((1, 1, 1))) for j in range(N)]
+        Mj = [Gp[j] @ G_rest[j].inverted() for j in range(N)]
+        for v in range(0, verts_world.shape[0], 343):          # ~20 sample verts
+            ref = Vector((0, 0, 0)); vr = Vector(verts_world[v])
+            for j in range(N):
+                if w22[v, j] > 1e-4:
+                    ref += float(w22[v, j]) * (Mj[j] @ vr)
+            derr.append((meval.vertices[v].co - ref).length)
+    print("TEST head-pos max err = %.4f mm | skin-deform max err vs SMPL-LBS = %.4f mm" % (max(herr) * 1000, max(derr) * 1000))
+    print("TEST bones=%d verts=%d faces=%d" % (N, verts_world.shape[0], faces.shape[0]))
+elif MODE == "rest":
+    pass                                                        # bind pose = standing rest skinned body
+else:
     bpy.context.scene.frame_start = 0; bpy.context.scene.frame_end = T - 1
     for t in range(T):
         bpy.context.scene.frame_set(t)
         pose_frame(t)
         for j in range(N):
-            pb = obj.pose.bones[NAMES[j]]
-            pb.keyframe_insert("location", frame=t)
-            pb.keyframe_insert("rotation_quaternion", frame=t)
+            pb = arm_obj.pose.bones[NAMES[j]]
+            pb.keyframe_insert("location", frame=t); pb.keyframe_insert("rotation_quaternion", frame=t)
 
 if MODE != "test":
     bpy.ops.object.mode_set(mode="OBJECT")
-    obj.select_set(True); bpy.context.view_layer.objects.active = obj
+    for o in bpy.data.objects:
+        o.select_set(o in (arm_obj, mo))
+    bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.export_scene.fbx(
-        filepath=OUT_FBX, use_selection=True, object_types={"ARMATURE"},
-        add_leaf_bones=False, bake_anim=(MODE == "anim"),
-        bake_anim_use_all_bones=True, bake_anim_step=1.0, bake_anim_simplify_factor=0.0,
-        axis_up="Z", axis_forward="X", apply_unit_scale=True, global_scale=1.0,
-        use_armature_deform_only=False, primary_bone_axis="Y", secondary_bone_axis="X")
-    print("EXPORTED %s mode=%s frames=%d fps=%g bones=%d" % (OUT_FBX, MODE, T, FPS, N))
+        filepath=OUT_FBX, use_selection=True, object_types={"ARMATURE", "MESH"},
+        add_leaf_bones=False, bake_anim=(MODE == "anim"), bake_anim_use_all_bones=True,
+        bake_anim_step=1.0, bake_anim_simplify_factor=0.0, mesh_smooth_type="FACE",
+        use_mesh_modifiers=False, axis_up="Z", axis_forward="X",
+        apply_unit_scale=True, global_scale=1.0, primary_bone_axis="Y", secondary_bone_axis="X")
+    print("EXPORTED %s mode=%s frames=%d fps=%g bones=%d verts=%d" % (OUT_FBX, MODE, T, FPS, N, verts_world.shape[0]))
