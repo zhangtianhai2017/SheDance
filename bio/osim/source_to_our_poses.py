@@ -54,6 +54,7 @@ order = [3, 6, 9, 12, 15, 1, 4, 7, 10, 2, 5, 8, 11, 13, 16, 18, 20, 14, 17, 19, 
 poses = np.zeros((T, 156)); trans = np.zeros((T, 3))
 restF0 = frame(restJ[0], restJ[2], restJ[1], restJ[3])
 SPINEFRAC = {3: 0.33, 6: 0.67, 9: 1.0, 12: 1.0}      # spine1/2/3 + neck: fraction from pelvis frame -> chest frame
+CLAVICLE = 0.40                                       # clavicle takes only ~40% of the aim-to-shoulder (rest is glenohumeral) -> no systematic shrug
 for t in range(T):
     sJ = srcJ(KP[t]); k = KP[t]; Rg = [np.eye(3)] * 24
     Fp = frame(sJ[0], sJ[2], sJ[1], sJ[3])                        # pelvis source frame
@@ -76,6 +77,10 @@ for t in range(T):
             Rg[j] = Fs @ Fr.T
         elif j in (3, 6, 9, 12):                                  # spine1/2/3 + neck: articulate the torso (bend + twist) by slerping OUR spine orientation from the pelvis frame to the CHEST frame (shoulder line + torso axis = clean signals). Avoids the old swayback (which came from AIMing to the noisy interpolated mid-spine points) AND avoids the over-stiff fully-rested torso.
             Rg[j] = spineSl(SPINEFRAC[j]).as_matrix() @ restF0.T
+        elif j in (13, 14):                                      # clavicle: PARTIAL aim to the shoulder (it elevates only ~CLAVICLE of the way; the glenohumeral does the rest) -> kills the systematic shrug that full-aiming the clavicle produces on any input
+            c = AIM[j]; aim = align(Rg[p] @ (restJ[c] - restJ[j]), sJ[c] - sJ[j])
+            aim = Slerp([0.0, 1.0], R.from_matrix(np.stack([np.eye(3), aim])))(CLAVICLE).as_matrix()
+            Rg[j] = aim @ Rg[p]
         elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]

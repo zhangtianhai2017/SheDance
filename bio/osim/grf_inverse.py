@@ -18,10 +18,13 @@ foot_b = {s: mujoco.mj_name2id(m, Bt, s) for s in ("toes_l", "toes_r", "calcn_l"
 M = float(m.body_mass.sum()); g = 9.81; weight = M * g
 
 z = np.load(IN, allow_pickle=True); qpos = np.asarray(z["qpos"], float).copy(); freq = float(z["frequency"]); T = len(qpos)
+WF = max(5, int(round(0.5 * freq))); SF = max(1.0, 0.13 * freq)     # ADAPTIVE floor window/smooth (0.5s / 0.13s)
+SQ = max(1.0, 0.08 * freq); SA = max(1.0, 0.06 * freq)             # ADAPTIVE qpos / accel smooth (sec x freq)
 def gsmooth(x, s=2.5, r=6):
     k = np.exp(-0.5 * (np.arange(-r, r + 1) / s) ** 2); k /= k.sum(); xp = np.pad(x, ((r, r), (0, 0)), mode="edge")
     return np.stack([np.convolve(xp[:, j], k, mode="valid") for j in range(x.shape[1])], 1)
-qpos = gsmooth(qpos); qn = qpos[:, 3:7]; qpos[:, 3:7] = qn / np.linalg.norm(qn, axis=1, keepdims=True)
+qpos = gsmooth(qpos, SQ, int(3 * SQ)); qn = qpos[:, 3:7]; qpos[:, 3:7] = qn / np.linalg.norm(qn, axis=1, keepdims=True)
+d.qpos[:] = qpos[0]; mujoco.mj_forward(m, d); HEIGHT = float(np.ptp(d.xpos[:, 2])); BAND_C = 0.04 * HEIGHT   # ADAPTIVE contact band ~ 4% of figure height
 
 # per-frame COM + foot positions
 com = np.zeros((T, 3)); footP = {s: np.zeros((T, 3)) for s in foot_b}
@@ -32,16 +35,16 @@ for t in range(T):
     for s, b in foot_b.items(): footP[s][t] = d.xpos[b]
 # de-drift the feet to a Z=0 floor for contact detection + CoP
 toeZ_l = footP["toes_l"][:, 2]; toeZ_r = footP["toes_r"][:, 2]
-floor = gaussian_filter1d(minimum_filter1d(np.minimum(toeZ_l, toeZ_r), 15, mode="nearest"), 4, mode="nearest")
+floor = gaussian_filter1d(minimum_filter1d(np.minimum(toeZ_l, toeZ_r), WF, mode="nearest"), SF, mode="nearest")
 
 # COM acceleration -> total GRF (Newton)
 a = np.zeros((T, 3)); a[1:-1] = (com[2:] - 2 * com[1:-1] + com[:-2]) * (freq ** 2)
-a = gsmooth(a, 2.0, 5)
+a = gsmooth(a, SA, int(3 * SA))
 GRF_tot = M * (a + np.array([0, 0, g]))                       # (T,3)
 
 # contact per foot (toe near floor) + distribute total GRF to contacting feet
 def contact(tz):
-    return (tz - floor < 0.06)
+    return (tz - floor < BAND_C)
 cL, cR = contact(toeZ_l), contact(toeZ_r)
 GRF = {"l": np.zeros((T, 3)), "r": np.zeros((T, 3))}; CoP = {"l": np.zeros((T, 3)), "r": np.zeros((T, 3))}
 for t in range(T):

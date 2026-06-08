@@ -12,12 +12,17 @@ from scipy.spatial.transform import Rotation as Rot, Slerp
 from scipy.ndimage import minimum_filter1d, binary_opening, binary_closing
 
 IN, OUT = sys.argv[1], sys.argv[2]
-BAND = float(os.environ.get("BAND", "0.05")); VTHR = float(os.environ.get("VTHR", "0.25"))
-RJ = np.asarray(np.load(os.path.expanduser("~/shedance/osim/our_humanoid.npz"), allow_pickle=True)["joints"], float)
+HUM = os.environ.get("HUM", os.path.expanduser("~/shedance/osim/our_humanoid.npz"))
+RJ = np.asarray(np.load(HUM, allow_pickle=True)["joints"], float)
 PAR = [-1, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 12, 13, 14, 16, 17, 18, 19]
 z = np.load(IN, allow_pickle=True); poses = np.asarray(z["poses"], float).copy(); trans = np.asarray(z["trans"], float)
 T = len(poses); FPS = float(z["mocap_framerate"]) if "mocap_framerate" in z.files else 30.0
 LEGS = [(1, 4, 7, 10), (2, 5, 8, 11)]                 # hip, knee, ankle, toe
+# --- ADAPTIVE params (no magic numbers): scale by figure HEIGHT, fps, and the foot's own speed ---
+HEIGHT = float(np.ptp(RJ[:22], axis=0).max())          # figure height from the rest skeleton
+BAND = float(os.environ["BAND"]) if "BAND" in os.environ else 0.03 * HEIGHT    # contact height band ~ 3% of height
+WIN = max(5, int(round(0.7 * FPS)))                    # local-floor window = 0.7 s
+print("ADAPTIVE: HEIGHT=%.2fm BAND=%.3fm(3%%h) WIN=%d(0.7s@%.0ffps)" % (HEIGHT, BAND, WIN, FPS), flush=True)
 
 
 def fk(pt, tr):
@@ -44,9 +49,11 @@ J_all = np.array([fk(poses[t], trans[t])[1] for t in range(T)])      # (T,22,3)
 toeZ = J_all[:, [10, 11], 2]
 
 
-def contact(zf):                                       # near LOCAL floor AND not lifting
-    lf = minimum_filter1d(zf, 21, mode="nearest"); vz = np.abs(np.r_[0.0, np.diff(zf)] * FPS)
-    c = (zf - lf < BAND) & (vz < VTHR)
+def contact(zf):                                       # near LOCAL floor AND not lifting (vert behaviour)
+    lf = minimum_filter1d(zf, WIN, mode="nearest"); vz = np.abs(np.r_[0.0, np.diff(zf)] * FPS)
+    vthr = float(os.environ["VTHR"]) if "VTHR" in os.environ else 0.6 * float(np.median(vz))   # "slow" = below ~typical foot vert speed
+    print("  VTHR=%.3f m/s (0.6x median foot |vz|)" % vthr, flush=True)
+    c = (zf - lf < BAND) & (vz < vthr)
     return binary_opening(binary_closing(c, np.ones(3)), np.ones(3))
 CMASK = [contact(toeZ[:, 0]), contact(toeZ[:, 1])]
 print("contact frames L=%d R=%d /%d" % (int(CMASK[0].sum()), int(CMASK[1].sum()), T))

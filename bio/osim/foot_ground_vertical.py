@@ -11,10 +11,11 @@ Usage: python foot_ground_vertical.py <in_joints_world.npz> <out_joints_world.np
 import sys, numpy as np
 from scipy.ndimage import minimum_filter1d, gaussian_filter1d
 IN, OUT = sys.argv[1], sys.argv[2]
-WIN = int(sys.argv[3]) if len(sys.argv) > 3 else 15
-SIG = float(sys.argv[4]) if len(sys.argv) > 4 else 4.0
 z = np.load(IN, allow_pickle=True); d = {k: z[k] for k in z.files}
 JW = z["joints_world"].astype(np.float32); N = [str(x) for x in z["joint_names"]]
+FPS = float(z["fps"]) if "fps" in z.files else 30.0
+WIN = int(sys.argv[3]) if len(sys.argv) > 3 else max(5, int(round(0.5 * FPS)))    # ADAPTIVE: 0.5 s floor window
+SIG = float(sys.argv[4]) if len(sys.argv) > 4 else max(1.0, 0.13 * FPS)           # ADAPTIVE: 0.13 s smooth
 L, R = N.index("left_foot"), N.index("right_foot")
 lowerToe = np.minimum(JW[:, L, 2], JW[:, R, 2])                 # lower foot toe-joint height per frame
 floor = gaussian_filter1d(minimum_filter1d(lowerToe, size=WIN, mode="nearest"), sigma=SIG, mode="nearest")
