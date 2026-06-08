@@ -49,13 +49,17 @@ def handframe(fwd, up):        # [right|up|fwd], FWD primary (finger direction r
     fwd = fwd / (np.linalg.norm(fwd) + 1e-9); up = up - up.dot(fwd) * fwd
     up /= (np.linalg.norm(up) + 1e-9); right = np.cross(up, fwd); right /= (np.linalg.norm(right) + 1e-9)
     return np.column_stack([right, up, fwd])
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as R, Slerp
 order = [3, 6, 9, 12, 15, 1, 4, 7, 10, 2, 5, 8, 11, 13, 16, 18, 20, 14, 17, 19, 21]
 poses = np.zeros((T, 156)); trans = np.zeros((T, 3))
 restF0 = frame(restJ[0], restJ[2], restJ[1], restJ[3])
+SPINEFRAC = {3: 0.33, 6: 0.67, 9: 1.0, 12: 1.0}      # spine1/2/3 + neck: fraction from pelvis frame -> chest frame
 for t in range(T):
     sJ = srcJ(KP[t]); k = KP[t]; Rg = [np.eye(3)] * 24
-    Rg[0] = frame(sJ[0], sJ[2], sJ[1], sJ[3]) @ restF0.T          # root: rest pelvis frame -> source
+    Fp = frame(sJ[0], sJ[2], sJ[1], sJ[3])                        # pelvis source frame
+    Fc = frame(sJ[0], sJ[17], sJ[16], sJ[12])                     # chest source frame (shoulder line + torso axis -- clean)
+    Rg[0] = Fp @ restF0.T                                         # root: rest pelvis frame -> source
+    spineSl = Slerp([0.0, 1.0], R.from_matrix(np.stack([Fp, Fc])))   # torso orientation pelvis->chest
     for j in order:
         p = PAR[j]
         if j == 15:                                              # head: face-forward full frame (nose+ears), not swing
@@ -70,8 +74,8 @@ for t in range(T):
             else:       sw, smc, si, sp, rw, rmc, ri, rp = k[41], k[[28, 32, 36, 40]], k[28], k[40], restJF[21], restJF[[37, 40, 46, 43]], restJF[37], restJF[43]
             Fs = handframe(smc.mean(0) - sw, np.cross(si - sw, sp - sw)); Fr = handframe(rmc.mean(0) - rw, np.cross(ri - rw, rp - rw))
             Rg[j] = Fs @ Fr.T
-        elif j in (3, 6, 9, 12):                                  # spine1/2/3 + neck: the 70-keypoint source has NO mid-spine points (srcJ interpolates them on the straight pelvis->neck line), so the per-joint AIM force-bent OUR spine into a fixed swayback (lordosis / belly-forward, std~=0). Keep OUR natural rest spine curve instead; the torso leans via the root (the real dance lean).
-            Rg[j] = Rg[p]
+        elif j in (3, 6, 9, 12):                                  # spine1/2/3 + neck: articulate the torso (bend + twist) by slerping OUR spine orientation from the pelvis frame to the CHEST frame (shoulder line + torso axis = clean signals). Avoids the old swayback (which came from AIMing to the noisy interpolated mid-spine points) AND avoids the over-stiff fully-rested torso.
+            Rg[j] = spineSl(SPINEFRAC[j]).as_matrix() @ restF0.T
         elif j in AIM:
             c = AIM[j]; rest_dir = restJ[c] - restJ[j]; src_dir = sJ[c] - sJ[j]
             aim = align(Rg[p] @ rest_dir, src_dir); Rg[j] = aim @ Rg[p]

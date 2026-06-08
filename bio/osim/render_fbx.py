@@ -48,8 +48,8 @@ b = mat.node_tree.nodes["Principled BSDF"]; b.inputs["Base Color"].default_value
 mesh.data.materials.append(mat)
 world = bpy.data.worlds.new("W"); sc.world = world; world.use_nodes = True
 world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.06, 0.06, 0.08, 1)
-sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = 16    # CPU: no GL needed (headless WSL)
-sc.render.resolution_x = 512; sc.render.resolution_y = 640; sc.render.film_transparent = False
+sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = int(os.environ.get("SAMPLES", "16"))   # CPU: no GL (headless)
+sc.render.resolution_x = int(os.environ.get("RESX", "512")); sc.render.resolution_y = int(os.environ.get("RESY", "640")); sc.render.film_transparent = False
 
 if RANGE:
     a = max(f0, RANGE[0]); b = min(f1, RANGE[1]) if len(RANGE) > 1 else f1; st = RANGE[2] if len(RANGE) > 2 else 1
