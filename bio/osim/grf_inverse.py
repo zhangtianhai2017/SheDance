@@ -33,34 +33,51 @@ for t in range(T):
     d.qpos[:] = qpos[t]; mujoco.mj_forward(m, d)
     com[t] = (mass[:, None] * d.xipos).sum(0) / M
     for s, b in foot_b.items(): footP[s][t] = d.xpos[b]
-# de-drift the feet to a Z=0 floor for contact detection + CoP
+# de-drift to a Z=0 floor; a foot contacts via its LOWEST part (toe OR heel) -- heel-stance (toe up) is still support
 toeZ_l = footP["toes_l"][:, 2]; toeZ_r = footP["toes_r"][:, 2]
-floor = gaussian_filter1d(minimum_filter1d(np.minimum(toeZ_l, toeZ_r), WF, mode="nearest"), SF, mode="nearest")
+heelZ_l = footP["calcn_l"][:, 2]; heelZ_r = footP["calcn_r"][:, 2]
+footZ_l = np.minimum(toeZ_l, heelZ_l); footZ_r = np.minimum(toeZ_r, heelZ_r)   # each foot's ground clearance (lowest part)
+floor = gaussian_filter1d(minimum_filter1d(np.minimum(footZ_l, footZ_r), WF, mode="nearest"), SF, mode="nearest")
 
-# COM acceleration -> total GRF (Newton)
+# COM acceleration -> total GRF (Newton): the physical truth of total vertical support
 a = np.zeros((T, 3)); a[1:-1] = (com[2:] - 2 * com[1:-1] + com[:-2]) * (freq ** 2)
 a = gsmooth(a, SA, int(3 * SA))
 GRF_tot = M * (a + np.array([0, 0, g]))                       # (T,3)
 
-# contact per foot (toe near floor) + distribute total GRF to contacting feet
-def contact(tz):
-    return (tz - floor < BAND_C)
-cL, cR = contact(toeZ_l), contact(toeZ_r)
+# AUTOMATIC airborne resolution (general, not per-clip): geometric foot-near-floor MISSES real support
+# (heel down/toe up, or monocular float), which is why "airborne" frames showed nonzero GRF. COM dynamics
+# arbitrate -- the body is TRULY airborne only when total vertical support is ~0 (free fall); any frame that
+# is geometrically off-floor but physically supported is reassigned to the lower foot. Self-consistent for
+# any input: a standing dance yields ~0 true-airborne frames, a real jump yields airborne frames with GRF~0.
+AIRBORNE_FRAC = float(os.environ.get("AIRBORNE_FRAC", "0.1"))                  # total support < 10% body weight = effectively free fall
+cL = (footZ_l - floor < BAND_C); cR = (footZ_r - floor < BAND_C)               # geometric contact (toe OR heel near floor)
+airborne = (~cL & ~cR) & (GRF_tot[:, 2] < AIRBORNE_FRAC * weight)              # no contact AND COM ~free fall = real flight
+lowL = footZ_l <= footZ_r
+def downpart(side, t):                                                          # CoP at whichever foot-part is on the floor
+    return (footP["toes_" + side] if footP["toes_" + side][t, 2] <= footP["calcn_" + side][t, 2] else footP["calcn_" + side])[t] * [1, 1, 0]
 GRF = {"l": np.zeros((T, 3)), "r": np.zeros((T, 3))}; CoP = {"l": np.zeros((T, 3)), "r": np.zeros((T, 3))}
+rescued = 0
 for t in range(T):
-    if cL[t] and cR[t]:                                       # double support -> split 50/50
+    if airborne[t]:
+        continue                                                              # genuine flight -> both feet 0
+    cl, cr = bool(cL[t]), bool(cR[t])
+    if not (cl or cr):                                                        # physics says supported but geometry missed -> lower foot
+        cl, cr = (True, False) if lowL[t] else (False, True); rescued += 1
+    if cl and cr:                                                            # double support -> split 50/50
         GRF["l"][t] = GRF_tot[t] * 0.5; GRF["r"][t] = GRF_tot[t] * 0.5
-        CoP["l"][t] = footP["toes_l"][t] * [1, 1, 0]; CoP["r"][t] = footP["toes_r"][t] * [1, 1, 0]
-    else:                                                     # body is always supported -> lower foot bears it
-        lf, tn = ("l", "toes_l") if toeZ_l[t] <= toeZ_r[t] else ("r", "toes_r")
-        GRF[lf][t] = GRF_tot[t]; CoP[lf][t] = footP[tn][t] * [1, 1, 0]
+        CoP["l"][t] = downpart("l", t); CoP["r"][t] = downpart("r", t)
+    elif cl:
+        GRF["l"][t] = GRF_tot[t]; CoP["l"][t] = downpart("l", t)
+    else:
+        GRF["r"][t] = GRF_tot[t]; CoP["r"][t] = downpart("r", t)
 
 np.savez(OUT, grf_l=GRF["l"].astype(np.float32), grf_r=GRF["r"].astype(np.float32),
          cop_l=CoP["l"].astype(np.float32), cop_r=CoP["r"].astype(np.float32),
          grf_total=GRF_tot.astype(np.float32), frequency=freq)
-st = cL | cR
+sup = ~airborne
 print("body weight = %.0f N" % weight)
-print("GRF_total_z: mean %.0f  median %.0f  min %.0f  max %.0f N  (站立相均值应≈体重 %.0f)" % (
-    GRF_tot[st, 2].mean(), np.median(GRF_tot[st, 2]), GRF_tot[:, 2].min(), GRF_tot[:, 2].max(), weight))
-print("接触帧: 左 %d 右 %d 双支撑 %d 腾空 %d /%d" % (int(cL.sum()), int(cR.sum()), int((cL & cR).sum()), int((~st).sum()), T))
-print("腾空帧 GRF_total_z 均值 %.0f N (应≈0=自由落体)" % (GRF_tot[~st, 2].mean() if (~st).any() else 0))
+print("GRF_total_z: 支撑相 mean %.0f median %.0f  全程 min %.0f max %.0f N  (支撑相均值应≈体重 %.0f)" % (
+    GRF_tot[sup, 2].mean(), np.median(GRF_tot[sup, 2]), GRF_tot[:, 2].min(), GRF_tot[:, 2].max(), weight))
+print("接触帧: 左 %d 右 %d 双支撑 %d | 真腾空(物理 GRF≈0) %d | 几何漏判→物理救回下脚 %d /%d" % (
+    int(cL.sum()), int(cR.sum()), int((cL & cR).sum()), int(airborne.sum()), rescued, T))
+print("真腾空帧 GRF_total_z 均值 %.0f N (现按物理定义,应≈0=自由落体)" % (GRF_tot[airborne, 2].mean() if airborne.any() else 0))
