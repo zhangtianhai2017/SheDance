@@ -7,13 +7,14 @@ Shoulder-girdle & knee coupler DOFs are CONSTRAINT-dependent in the .osim (auto-
 so we don't map them. First pass: pelvis orientation upright (isolate joint-convention test);
 pelvis translation taken from qpos with MuJoCo Z-up -> OpenSim Y-up axis swap.
 """
-import os, numpy as np
+import os, sys, numpy as np
 import opensim as osim
 
-CACHE = os.path.expanduser(
+# general: take qpos npz + output mot as args (falls back to the original AIST probe cache)
+CACHE = os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else os.path.expanduser(
     "~/.musclemimic/caches/AMASS/MyoFullBody/gmr/AIST/gPO_sBM_cAll_d10_mPO0_ch01.npz")
 MODEL = os.path.expanduser("~/shedance/osim/cyclistFullBodyMuscle.osim")
-OUT = os.path.expanduser("~/shedance/osim/pop.mot")
+OUT = os.path.expanduser(sys.argv[2]) if len(sys.argv) > 2 else os.path.expanduser("~/shedance/osim/pop.mot")
 
 # OpenSim coord name -> MyoFullBody qpos index (primary joints only)
 MAP = {
