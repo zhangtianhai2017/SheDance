@@ -25,8 +25,15 @@ EN = {0: "pelvis", 1: "left_hip", 2: "right_hip", 3: "spine1", 4: "left_knee", 5
 CN = {0: "盆骨", 1: "左髋", 2: "右髋", 3: "脊1", 4: "左膝", 5: "右膝", 6: "脊2", 7: "左踝", 8: "右踝",
       9: "脊3", 10: "左脚", 11: "右脚", 12: "颈", 13: "左锁骨", 14: "右锁骨", 15: "头", 16: "左肩",
       17: "右肩", 18: "左肘", 19: "右肘", 20: "左腕", 21: "右腕"}
+FING = ["index1", "index2", "index3", "middle1", "middle2", "middle3", "pinky1", "pinky2", "pinky3",
+        "ring1", "ring2", "ring3", "thumb1", "thumb2", "thumb3"]
+FCN = {"index": "食指", "middle": "中指", "pinky": "小指", "ring": "无名指", "thumb": "拇指"}
+for _side, _scn, _base in (("left", "左", 22), ("right", "右", 37)):   # SMPL-H 30 finger joints (15 / hand)
+    for _k, _f in enumerate(FING):
+        EN[_base + _k] = "%s_%s" % (_side, _f); CN[_base + _k] = "%s%s%s" % (_scn, FCN[_f[:-1]], _f[-1])
 BATCHES = {"arm": [13, 14, 16, 17, 18, 19, 20, 21], "leg": [1, 2, 4, 5, 7, 8, 10, 11],
-           "torso": [0, 3, 6, 9, 12, 15], "all": list(range(22))}
+           "torso": [0, 3, 6, 9, 12, 15], "all": list(range(22)),
+           "lhand": list(range(22, 37)), "rhand": list(range(37, 52)), "hand": list(range(22, 52))}
 JOINTS = BATCHES[BATCH]
 AX = [("X", 0), ("Y", 1), ("Z", 2)]
 

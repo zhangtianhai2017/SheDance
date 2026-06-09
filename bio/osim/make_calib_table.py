@@ -4,7 +4,8 @@ their manifests so it stays in sync. Args: [calib_dir] [out.md]"""
 import sys, csv, os
 C = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/shedance/wf_out/calib")
 OUT = sys.argv[2] if len(sys.argv) > 2 else "/mnt/c/work/2026/Claude/SheDance/SheDance_calib_timeline.md"
-BATCHES = [("arm", "calib_arm.fbx"), ("leg", "calib_leg.fbx"), ("torso", "calib_torso.fbx")]
+BATCHES = [("arm", "calib_arm.fbx"), ("leg", "calib_leg.fbx"), ("torso", "calib_torso.fbx"),
+           ("lhand", "calib_lhand.fbx"), ("rhand", "calib_rhand.fbx")]
 L = ["# SheDance 标定 — 帧 / 时间 → 动作表", "",
      "每个姿势静止保持 **1 秒**(30 帧 @30fps);第 K 个姿势 = 第 K 秒 = 帧 `30K`–`30K+29`。",
      "把 `SheDance_calib.zip` 里对应的 `calib_<batch>.fbx` 用**和 dance1.fbx 同一个 IK Retargeter** 导入并 scrub ——",

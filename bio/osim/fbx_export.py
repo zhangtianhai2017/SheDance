@@ -16,13 +16,13 @@ from mathutils import Matrix, Quaternion, Vector
 
 JW_NPZ, HUM_NPZ, OUT_FBX, MODE = sys.argv[-4], sys.argv[-3], sys.argv[-2], sys.argv[-1]
 PKL = "/mnt/c/work/2026/Claude/SheDance/backup/smpl/SMPLH_NEUTRAL.pkl"   # for skin weights (6890x52)
-N = 22
 RX90_np = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)            # canonical Y-up -> world Z-up
 RX90_M = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 
 z = np.load(JW_NPZ, allow_pickle=True)
 JW = z["joints_world"].astype(float); JWR = z["joint_world_rot"].astype(float)
-NAMES = [str(x) for x in z["joint_names"]][:N]; PAR = [int(x) for x in z["parents"]][:N]
+_an = [str(x) for x in z["joint_names"]]; N = len(_an) if len(_an) > 24 else 22   # 22 body, or 52 with articulated fingers
+NAMES = _an[:N]; PAR = [int(x) for x in z["parents"]][:N]
 FPS = float(z["fps"]); T = JW.shape[0]
 hum = np.load(HUM_NPZ, allow_pickle=True)
 restJ = hum["joints"].astype(float)[:N]
@@ -33,8 +33,9 @@ verts_world = (RX90_np @ verts.T).T
 import pickle
 w52 = np.asarray(pickle.load(open(PKL, "rb"), encoding="latin1")["weights"], float)   # (6890,52)
 w22 = w52[:, :N].copy()
-w22[:, 20] += w52[:, 22:37].sum(1)                  # left fingers (22-36) -> left_wrist
-w22[:, 21] += w52[:, 37:52].sum(1)                  # right fingers (37-51) -> right_wrist
+if N <= 24:                                         # body rig: fold fingers into the wrists (the 52-bone rig keeps them articulated)
+    w22[:, 20] += w52[:, 22:37].sum(1)              # left fingers (22-36) -> left_wrist
+    w22[:, 21] += w52[:, 37:52].sum(1)              # right fingers (37-51) -> right_wrist
 
 # ---- floor-align: lowest SKINNED-MESH point over the clip -> Z=0, + frame0 horizontal -> origin.
 # LBS is equivariant under a global rigid shift of (bind skel, bind mesh, pose skel), so shifting all
