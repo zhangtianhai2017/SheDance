@@ -46,6 +46,15 @@ W, Hh = 480, 700
 exts = V.max(1) - V.min(1)                       # (N,3) per-frame extents
 up_ax = int(np.argmax(np.median(exts, 0)))       # body-height axis (movement axes vary per-frame, height is steady)
 size = float(np.median(exts[:, up_ax]))          # ~ body height (~1.7m)
+HAND = os.environ.get("HAND")                    # "left"/"right" -> zoom the camera onto that hand
+if HAND:
+    import pickle
+    _w = np.asarray(pickle.load(open("/mnt/c/work/2026/Claude/SheDance/backup/smpl/SMPLH_NEUTRAL.pkl", "rb"), encoding="latin1")["weights"], float)
+    _cols = list(range(22, 37)) if HAND == "left" else list(range(37, 52))   # FINGERS only (exclude wrist/forearm) -> tight finger close-up
+    HV = np.where(_w[:, _cols].sum(1) > 0.3)[0]  # vertices skinned to that hand's finger bones
+    FRAMESIZE = float(np.median([float((V[i][HV].max(0) - V[i][HV].min(0)).max()) for i in range(0, len(V), max(1, len(V) // 20))]))
+else:
+    HV = None; FRAMESIZE = size
 up = np.zeros(3); up[up_ax] = 1.0
 horiz = [a for a in range(3) if a != up_ax]
 az = np.radians(float(os.environ.get("CAM_AZ", "0"))); el = np.radians(float(os.environ.get("CAM_EL", "8")))
@@ -70,8 +79,8 @@ def shade(N):
     c = np.clip(FLESH[None, :] * s[:, None], 0, 1)
     return (np.concatenate([c, np.ones((len(c), 1))], 1) * 255).astype(np.uint8)
 def frame(i):
-    ctr = V[i].mean(0)                           # follow the body (remove dance translation -> stays centered)
-    campose = look_at(ctr + dir3 * size * 2.2, ctr, up)
+    ctr = V[i][HV].mean(0) if HAND else V[i].mean(0)   # follow the hand (HAND mode) or the body center
+    campose = look_at(ctr + dir3 * FRAMESIZE * (1.3 if HAND else 2.2), ctr, up)   # tighter on hand
     tm = trimesh.Trimesh(V[i], F, process=True)
     tm.visual.vertex_colors = shade(tm.vertex_normals)
     sc = pyrender.Scene(bg_color=[0.12, 0.13, 0.17, 1.0], ambient_light=[1.0, 1.0, 1.0])
